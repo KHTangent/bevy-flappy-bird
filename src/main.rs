@@ -40,9 +40,12 @@ fn handle_movement(
 	if keyboard_input.pressed(KeyCode::ArrowRight) {
 		direction.x += 1.0;
 	}
-	direction = direction.normalize_or_zero() * (elapsed * PLAYER_SPEED);
+	if direction == Vec2::ZERO {
+		return;
+	}
+	direction = direction.normalize() * (elapsed * PLAYER_SPEED);
 
-	player_transform.translation += direction.extend(1.0);
+	player_transform.translation += direction.extend(0.0);
 }
 
 fn main() {
