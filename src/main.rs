@@ -2,11 +2,35 @@ use bevy::prelude::*;
 
 const WINDOW_SIZE: Vec2 = Vec2::new(1280.0, 720.0);
 
+const GRAVITY_STRENGTH: f32 = 500.0;
+const JUMP_STRENGTH: f32 = 500.0;
+
 const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 32.0);
-const PLAYER_SPEED: f32 = 500.0;
 
 #[derive(Component)]
 struct Player;
+
+#[derive(Component, Default)]
+#[require(Transform)]
+struct Velocity {
+	pub x: f32,
+	pub y: f32,
+}
+
+#[derive(Component, Default)]
+#[require(Velocity)]
+struct Acceleration {
+	pub x: f32,
+	pub y: f32,
+}
+impl Acceleration {
+	fn gravity() -> Self {
+		Acceleration {
+			x: 0.0,
+			y: -GRAVITY_STRENGTH,
+		}
+	}
+}
 
 fn setup(mut commands: Commands) {
 	commands.spawn(Camera2d);
@@ -17,35 +41,35 @@ fn setup(mut commands: Commands) {
 			scale: PLAYER_SIZE.extend(1.0),
 			..default()
 		},
+		Acceleration::gravity(),
+		Velocity::default(),
 		Player,
 	));
 }
 
 fn handle_movement(
 	keyboard_input: Res<ButtonInput<KeyCode>>,
-	mut player_transform: Single<&mut Transform, With<Player>>,
-	time: Res<Time>,
+	mut player_velocity: Single<&mut Velocity, With<Player>>,
 ) {
-	let elapsed = time.delta_secs();
-	let mut direction = Vec2::ZERO;
-	if keyboard_input.pressed(KeyCode::ArrowUp) {
-		direction.y += 1.0;
+	if keyboard_input.just_pressed(KeyCode::Space) {
+		player_velocity.y = JUMP_STRENGTH;
 	}
-	if keyboard_input.pressed(KeyCode::ArrowDown) {
-		direction.y -= 1.0;
-	}
-	if keyboard_input.pressed(KeyCode::ArrowLeft) {
-		direction.x -= 1.0;
-	}
-	if keyboard_input.pressed(KeyCode::ArrowRight) {
-		direction.x += 1.0;
-	}
-	if direction == Vec2::ZERO {
-		return;
-	}
-	direction = direction.normalize() * (elapsed * PLAYER_SPEED);
+}
 
-	player_transform.translation += direction.extend(0.0);
+fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
+	let elapsed = time.delta_secs();
+	for (mut transform, velocity) in &mut query {
+		let moved = Vec2::new(velocity.x * elapsed, velocity.y * elapsed);
+		transform.translation += moved.extend(0.0);
+	}
+}
+
+fn apply_acceleration(mut query: Query<(&mut Velocity, &Acceleration)>, time: Res<Time>) {
+	let elapsed = time.delta_secs();
+	for (mut velocity, acceleration) in &mut query {
+		velocity.x += acceleration.x * elapsed;
+		velocity.y += acceleration.y * elapsed;
+	}
 }
 
 fn main() {
@@ -60,6 +84,7 @@ fn main() {
 			..default()
 		}))
 		.add_systems(Startup, setup)
-		.add_systems(FixedUpdate, handle_movement)
+		.add_systems(FixedUpdate, (apply_acceleration, apply_velocity))
+		.add_systems(Update, handle_movement)
 		.run();
 }
