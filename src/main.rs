@@ -1,27 +1,39 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 const WINDOW_SIZE: Vec2 = Vec2::new(1280.0, 720.0);
 
-const GRAVITY_STRENGTH: f32 = 500.0;
+const GRAVITY_STRENGTH: f32 = 1000.0;
 const JUMP_STRENGTH: f32 = 500.0;
+const PIPE_SPEED: f32 = 250.0;
 
 const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 32.0);
+const PIPE_WIDTH: f32 = 32.0;
 
 #[derive(Component)]
 struct Player;
 
+#[derive(Component)]
+struct Pipe;
+
+#[derive(Resource)]
+struct PipeSpawnTimer {
+	timer: Timer,
+}
+
 #[derive(Component, Default)]
 #[require(Transform)]
 struct Velocity {
-	pub x: f32,
-	pub y: f32,
+	x: f32,
+	y: f32,
 }
 
 #[derive(Component, Default)]
 #[require(Velocity)]
 struct Acceleration {
-	pub x: f32,
-	pub y: f32,
+	x: f32,
+	y: f32,
 }
 impl Acceleration {
 	fn gravity() -> Self {
@@ -33,11 +45,14 @@ impl Acceleration {
 }
 
 fn setup(mut commands: Commands) {
+	commands.insert_resource(PipeSpawnTimer {
+		timer: Timer::new(Duration::from_secs(2), TimerMode::Repeating),
+	});
 	commands.spawn(Camera2d);
 	commands.spawn((
 		Sprite::from_color(Color::srgb(0., 0., 1.), Vec2::ONE),
 		Transform {
-			translation: Vec3::new(128.0, 128.0, 0.0),
+			translation: Vec3::new(-320.0, 0.0, 0.0),
 			scale: PLAYER_SIZE.extend(1.0),
 			..default()
 		},
@@ -72,6 +87,41 @@ fn apply_acceleration(mut query: Query<(&mut Velocity, &Acceleration)>, time: Re
 	}
 }
 
+fn handle_pipe_spawn(
+	mut commands: Commands,
+	time: Res<Time>,
+	mut pipe_spawn_timer: ResMut<PipeSpawnTimer>,
+) {
+	pipe_spawn_timer.timer.tick(time.delta());
+	if pipe_spawn_timer.timer.finished() {
+		commands.spawn((
+			Sprite::from_color(Color::srgb(0., 1., 0.), Vec2::ONE),
+			Transform {
+				translation: Vec3::new(WINDOW_SIZE.x / 2.0, 0.0, 0.0),
+				scale: Vec3 {
+					x: PIPE_WIDTH,
+					y: WINDOW_SIZE.y,
+					z: 1.0,
+				},
+				..default()
+			},
+			Velocity {
+				x: -PIPE_SPEED,
+				y: 0.0,
+			},
+			Pipe,
+		));
+	}
+}
+
+fn handle_pipe_despawn(mut commands: Commands, query: Query<(Entity, &Transform), With<Pipe>>) {
+	for (entity, transform) in query {
+		if transform.translation.x < -WINDOW_SIZE.x {
+			commands.entity(entity).despawn();
+		}
+	}
+}
+
 fn main() {
 	App::new()
 		.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -84,7 +134,15 @@ fn main() {
 			..default()
 		}))
 		.add_systems(Startup, setup)
-		.add_systems(FixedUpdate, (apply_acceleration, apply_velocity))
+		.add_systems(
+			FixedUpdate,
+			(
+				apply_acceleration,
+				apply_velocity,
+				handle_pipe_spawn,
+				handle_pipe_despawn,
+			),
+		)
 		.add_systems(Update, handle_movement)
 		.run();
 }
