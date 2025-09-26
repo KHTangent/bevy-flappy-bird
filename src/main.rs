@@ -1,12 +1,15 @@
 use std::time::Duration;
 
+use rand::{rng, Rng};
+
 use bevy::prelude::*;
 
 const WINDOW_SIZE: Vec2 = Vec2::new(1280.0, 720.0);
 
-const GRAVITY_STRENGTH: f32 = 1000.0;
-const JUMP_STRENGTH: f32 = 500.0;
-const PIPE_SPEED: f32 = 250.0;
+const GRAVITY_STRENGTH: f32 = 2000.0;
+const JUMP_STRENGTH: f32 = 800.0;
+const PIPE_SPEED: f32 = 450.0;
+const PIPE_GAP: f32 = 225.0;
 
 const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 32.0);
 const PIPE_WIDTH: f32 = 32.0;
@@ -87,31 +90,52 @@ fn apply_acceleration(mut query: Query<(&mut Velocity, &Acceleration)>, time: Re
 	}
 }
 
+#[derive(Bundle)]
+struct PipeBundle {
+	sprite: Sprite,
+	transform: Transform,
+	velocity: Velocity,
+	pipe: Pipe,
+}
+
+impl PipeBundle {
+	fn new(height: f32, y: f32) -> Self {
+		PipeBundle {
+			sprite: Sprite::from_color(Color::srgb(0., 1., 0.), Vec2::ONE),
+			transform: Transform {
+				translation: Vec3::new(WINDOW_SIZE.x / 2.0, y - height / 2.0, 0.0),
+				scale: Vec3 {
+					x: PIPE_WIDTH,
+					y: height,
+					z: 1.0,
+				},
+				..default()
+			},
+			velocity: Velocity {
+				x: -PIPE_SPEED,
+				y: 0.0,
+			},
+			pipe: Pipe,
+		}
+	}
+}
+
 fn handle_pipe_spawn(
 	mut commands: Commands,
 	time: Res<Time>,
 	mut pipe_spawn_timer: ResMut<PipeSpawnTimer>,
 ) {
 	pipe_spawn_timer.timer.tick(time.delta());
-	if pipe_spawn_timer.timer.finished() {
-		commands.spawn((
-			Sprite::from_color(Color::srgb(0., 1., 0.), Vec2::ONE),
-			Transform {
-				translation: Vec3::new(WINDOW_SIZE.x / 2.0, 0.0, 0.0),
-				scale: Vec3 {
-					x: PIPE_WIDTH,
-					y: WINDOW_SIZE.y,
-					z: 1.0,
-				},
-				..default()
-			},
-			Velocity {
-				x: -PIPE_SPEED,
-				y: 0.0,
-			},
-			Pipe,
-		));
+	if !pipe_spawn_timer.timer.finished() {
+		return;
 	}
+	let pipe_height = WINDOW_SIZE.y;
+	let bottom_pos: f32 =
+		rng().random_range((-WINDOW_SIZE.y / 2.0)..(WINDOW_SIZE.y / 2.0 - PIPE_GAP));
+	commands.spawn_batch([
+		PipeBundle::new(pipe_height, bottom_pos + pipe_height + PIPE_GAP),
+		PipeBundle::new(pipe_height, bottom_pos),
+	]);
 }
 
 fn handle_pipe_despawn(mut commands: Commands, query: Query<(Entity, &Transform), With<Pipe>>) {
