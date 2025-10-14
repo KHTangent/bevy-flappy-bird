@@ -166,7 +166,7 @@ fn check_player_pipe_collission(
 	let (player_transform, player) = player_query.into_inner();
 	let player_collider = Aabb2d::new(
 		player_transform.translation.truncate(),
-		player_transform.scale.truncate(),
+		player_transform.scale.truncate() / 2.0,
 	);
 	for pipe_transform in pipes_query {
 		let pipe_collider = Aabb2d::new(
