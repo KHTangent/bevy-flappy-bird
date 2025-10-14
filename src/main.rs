@@ -29,6 +29,11 @@ struct PipeSpawnTimer {
 	timer: Timer,
 }
 
+#[derive(Resource, Default)]
+struct GlobalGameState {
+	game_over: bool,
+}
+
 #[derive(Component, Default)]
 #[require(Transform)]
 struct Velocity {
@@ -151,6 +156,7 @@ fn handle_pipe_despawn(mut commands: Commands, query: Query<(Entity, &Transform)
 
 fn check_player_pipe_collission(
 	mut commands: Commands,
+	mut global_state: ResMut<GlobalGameState>,
 	player_query: Single<(&Transform, Entity), With<Player>>,
 	pipes_query: Query<&Transform, With<Pipe>>,
 ) {
@@ -166,12 +172,18 @@ fn check_player_pipe_collission(
 		);
 		if player_collider.intersects(&pipe_collider) {
 			commands.entity(player).despawn();
+			global_state.game_over = true;
 		}
 	}
 }
 
+fn not_game_over(global_state: Res<GlobalGameState>) -> bool {
+	!global_state.game_over
+}
+
 fn main() {
 	App::new()
+		.insert_resource(GlobalGameState::default())
 		.add_plugins(DefaultPlugins.set(WindowPlugin {
 			primary_window: Some(Window {
 				title: "Flappy game".into(),
@@ -190,7 +202,8 @@ fn main() {
 				handle_pipe_spawn,
 				handle_pipe_despawn,
 				check_player_pipe_collission,
-			),
+			)
+				.run_if(not_game_over),
 		)
 		.add_systems(Update, handle_movement)
 		.run();
