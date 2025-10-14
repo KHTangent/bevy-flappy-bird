@@ -22,7 +22,9 @@ const PIPE_HEIGHT: f32 = WINDOW_SIZE.y;
 struct Player;
 
 #[derive(Component)]
-struct Pipe;
+struct Pipe {
+	give_score: bool,
+}
 
 #[derive(Resource)]
 struct PipeSpawnTimer {
@@ -31,6 +33,7 @@ struct PipeSpawnTimer {
 
 #[derive(Resource, Default)]
 struct GlobalGameState {
+	score: i64,
 	game_over: bool,
 }
 
@@ -108,7 +111,7 @@ struct PipeBundle {
 }
 
 impl PipeBundle {
-	fn new(height: f32, y: f32) -> Self {
+	fn new(height: f32, y: f32, give_score: bool) -> Self {
 		PipeBundle {
 			sprite: Sprite::from_color(Color::srgb(0., 1., 0.), Vec2::ONE),
 			transform: Transform {
@@ -124,7 +127,7 @@ impl PipeBundle {
 				x: -PIPE_SPEED,
 				y: 0.0,
 			},
-			pipe: Pipe,
+			pipe: Pipe { give_score },
 		}
 	}
 }
@@ -141,8 +144,8 @@ fn handle_pipe_spawn(
 	let bottom_pos: f32 =
 		rng().random_range((-WINDOW_SIZE.y / 2.0)..(WINDOW_SIZE.y / 2.0 - PIPE_GAP));
 	commands.spawn_batch([
-		PipeBundle::new(PIPE_HEIGHT, bottom_pos + PIPE_HEIGHT + PIPE_GAP),
-		PipeBundle::new(PIPE_HEIGHT, bottom_pos),
+		PipeBundle::new(PIPE_HEIGHT, bottom_pos + PIPE_HEIGHT + PIPE_GAP, true),
+		PipeBundle::new(PIPE_HEIGHT, bottom_pos, false),
 	]);
 }
 
@@ -177,6 +180,26 @@ fn check_player_pipe_collission(
 	}
 }
 
+fn give_score_when_over_player(
+	mut global_state: ResMut<GlobalGameState>,
+	player_query: Single<&Transform, With<Player>>,
+	pipes_query: Query<(&Transform, &mut Pipe)>,
+) {
+	let player_transform = player_query.into_inner();
+	let player_left = player_transform.translation.x - player_transform.scale.x / 2.0;
+	for (pipe_transform, mut pipe) in pipes_query {
+		if !pipe.give_score {
+			continue;
+		}
+		let pipe_right = pipe_transform.translation.x + pipe_transform.scale.x / 2.0;
+		if pipe_right < player_left {
+			pipe.give_score = false;
+			global_state.score += 1;
+			println!("Score: {}", global_state.score);
+		}
+	}
+}
+
 fn not_game_over(global_state: Res<GlobalGameState>) -> bool {
 	!global_state.game_over
 }
@@ -202,6 +225,7 @@ fn main() {
 				handle_pipe_spawn,
 				handle_pipe_despawn,
 				check_player_pipe_collission,
+				give_score_when_over_player,
 			)
 				.run_if(not_game_over),
 		)
