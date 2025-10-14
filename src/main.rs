@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use rand::{rng, Rng};
 
-use bevy::prelude::*;
+use bevy::{
+	math::bounding::{Aabb2d, IntersectsVolume},
+	prelude::*,
+};
 
 const WINDOW_SIZE: Vec2 = Vec2::new(1280.0, 720.0);
 
@@ -13,6 +16,7 @@ const PIPE_GAP: f32 = 225.0;
 
 const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 32.0);
 const PIPE_WIDTH: f32 = 32.0;
+const PIPE_HEIGHT: f32 = WINDOW_SIZE.y;
 
 #[derive(Component)]
 struct Player;
@@ -129,12 +133,11 @@ fn handle_pipe_spawn(
 	if !pipe_spawn_timer.timer.finished() {
 		return;
 	}
-	let pipe_height = WINDOW_SIZE.y;
 	let bottom_pos: f32 =
 		rng().random_range((-WINDOW_SIZE.y / 2.0)..(WINDOW_SIZE.y / 2.0 - PIPE_GAP));
 	commands.spawn_batch([
-		PipeBundle::new(pipe_height, bottom_pos + pipe_height + PIPE_GAP),
-		PipeBundle::new(pipe_height, bottom_pos),
+		PipeBundle::new(PIPE_HEIGHT, bottom_pos + PIPE_HEIGHT + PIPE_GAP),
+		PipeBundle::new(PIPE_HEIGHT, bottom_pos),
 	]);
 }
 
@@ -142,6 +145,27 @@ fn handle_pipe_despawn(mut commands: Commands, query: Query<(Entity, &Transform)
 	for (entity, transform) in query {
 		if transform.translation.x < -WINDOW_SIZE.x {
 			commands.entity(entity).despawn();
+		}
+	}
+}
+
+fn check_player_pipe_collission(
+	mut commands: Commands,
+	player_query: Single<(&Transform, Entity), With<Player>>,
+	pipes_query: Query<&Transform, With<Pipe>>,
+) {
+	let (player_transform, player) = player_query.into_inner();
+	let player_collider = Aabb2d::new(
+		player_transform.translation.truncate(),
+		player_transform.scale.truncate(),
+	);
+	for pipe_transform in pipes_query {
+		let pipe_collider = Aabb2d::new(
+			pipe_transform.translation.truncate(),
+			pipe_transform.scale.truncate() / 2.0,
+		);
+		if player_collider.intersects(&pipe_collider) {
+			commands.entity(player).despawn();
 		}
 	}
 }
@@ -165,6 +189,7 @@ fn main() {
 				apply_velocity,
 				handle_pipe_spawn,
 				handle_pipe_despawn,
+				check_player_pipe_collission,
 			),
 		)
 		.add_systems(Update, handle_movement)
