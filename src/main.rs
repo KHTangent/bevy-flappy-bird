@@ -200,6 +200,18 @@ fn check_player_pipe_collission(
 	}
 }
 
+fn check_player_under_screen(
+	mut commands: Commands,
+	mut global_state: ResMut<GlobalGameState>,
+	player_query: Single<(&Transform, Entity), With<Player>>,
+) {
+	let (player_transform, player) = player_query.into_inner();
+	if player_transform.translation.y < -WINDOW_SIZE.y / 2.0 {
+		commands.entity(player).despawn();
+		global_state.game_over = true;
+	}
+}
+
 fn give_score_when_over_player(
 	mut global_state: ResMut<GlobalGameState>,
 	player_query: Single<&Transform, With<Player>>,
@@ -251,6 +263,7 @@ fn main() {
 				handle_pipe_spawn,
 				handle_pipe_despawn,
 				check_player_pipe_collission,
+				check_player_under_screen,
 				give_score_when_over_player,
 				update_score,
 			)
