@@ -21,6 +21,13 @@ const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 32.0);
 const PIPE_WIDTH: f32 = 32.0;
 const PIPE_HEIGHT: f32 = WINDOW_SIZE.y;
 
+#[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
+enum GameStates {
+	#[default]
+	InGame,
+	GameOver,
+}
+
 #[derive(Component)]
 struct Player;
 
@@ -37,11 +44,8 @@ struct PipeSpawnTimer {
 	timer: Timer,
 }
 
-#[derive(Resource, Default)]
-struct GlobalGameState {
-	score: i64,
-	game_over: bool,
-}
+#[derive(Resource, Default, Deref, DerefMut)]
+struct GameScore(i64);
 
 #[derive(Component, Default)]
 #[require(Transform)]
@@ -179,9 +183,9 @@ fn handle_pipe_despawn(mut commands: Commands, query: Query<(Entity, &Transform)
 
 fn check_player_pipe_collission(
 	mut commands: Commands,
-	mut global_state: ResMut<GlobalGameState>,
 	player_query: Single<(&Transform, Entity), With<Player>>,
 	pipes_query: Query<&Transform, With<Pipe>>,
+	mut next_state: ResMut<NextState<GameStates>>,
 ) {
 	let (player_transform, player) = player_query.into_inner();
 	let player_collider = Aabb2d::new(
@@ -195,25 +199,25 @@ fn check_player_pipe_collission(
 		);
 		if player_collider.intersects(&pipe_collider) {
 			commands.entity(player).despawn();
-			global_state.game_over = true;
+			next_state.set(GameStates::GameOver);
 		}
 	}
 }
 
 fn check_player_under_screen(
 	mut commands: Commands,
-	mut global_state: ResMut<GlobalGameState>,
 	player_query: Single<(&Transform, Entity), With<Player>>,
+	mut next_state: ResMut<NextState<GameStates>>,
 ) {
 	let (player_transform, player) = player_query.into_inner();
 	if player_transform.translation.y < -WINDOW_SIZE.y / 2.0 {
 		commands.entity(player).despawn();
-		global_state.game_over = true;
+		next_state.set(GameStates::GameOver);
 	}
 }
 
 fn give_score_when_over_player(
-	mut global_state: ResMut<GlobalGameState>,
+	mut score: ResMut<GameScore>,
 	player_query: Single<&Transform, With<Player>>,
 	pipes_query: Query<(&Transform, &mut Pipe)>,
 ) {
@@ -226,25 +230,18 @@ fn give_score_when_over_player(
 		let pipe_right = pipe_transform.translation.x + pipe_transform.scale.x / 2.0;
 		if pipe_right < player_left {
 			pipe.give_score = false;
-			global_state.score += 1;
+			**score += 1;
 		}
 	}
 }
 
-fn update_score(
-	state: Res<GlobalGameState>,
-	mut score_display: Single<&mut Text, With<Scoretext>>,
-) {
-	**score_display = format!("Score: {}", state.score).into();
-}
-
-fn not_game_over(global_state: Res<GlobalGameState>) -> bool {
-	!global_state.game_over
+fn update_score(score: Res<GameScore>, mut score_display: Single<&mut Text, With<Scoretext>>) {
+	**score_display = format!("Score: {}", **score).into();
 }
 
 fn main() {
 	App::new()
-		.insert_resource(GlobalGameState::default())
+		.insert_resource(GameScore::default())
 		.add_plugins(DefaultPlugins.set(WindowPlugin {
 			primary_window: Some(Window {
 				title: "Flappy game".into(),
@@ -267,8 +264,9 @@ fn main() {
 				give_score_when_over_player,
 				update_score,
 			)
-				.run_if(not_game_over),
+				.run_if(in_state(GameStates::InGame)),
 		)
 		.add_systems(Update, handle_movement)
+		.init_state::<GameStates>()
 		.run();
 }
