@@ -69,12 +69,8 @@ impl Acceleration {
 	}
 }
 
-fn setup(mut commands: Commands) {
-	commands.insert_resource(PipeSpawnTimer {
-		timer: Timer::new(Duration::from_secs(2), TimerMode::Repeating),
-	});
-	commands.spawn(Camera2d);
-	commands.spawn((
+fn make_player() -> impl Bundle {
+	(
 		Sprite::from_color(Color::srgb(0., 0., 1.), Vec2::ONE),
 		Transform {
 			translation: Vec3::new(-320.0, 0.0, 0.0),
@@ -84,7 +80,14 @@ fn setup(mut commands: Commands) {
 		Acceleration::gravity(),
 		Velocity::default(),
 		Player,
-	));
+	)
+}
+
+fn setup(mut commands: Commands) {
+	commands.insert_resource(PipeSpawnTimer {
+		timer: Timer::new(Duration::from_secs(2), TimerMode::Repeating),
+	});
+	commands.spawn(Camera2d);
 	commands.spawn((
 		Scoretext,
 		Text::new("Score: 0"),
@@ -99,6 +102,27 @@ fn setup(mut commands: Commands) {
 			..default()
 		},
 	));
+}
+
+fn on_enter_game(mut commands: Commands) {
+	commands.spawn(make_player());
+}
+
+fn on_game_over(mut commands: Commands, player: Single<Entity, With<Player>>) {
+	commands.entity(*player).despawn();
+}
+
+fn on_game_restart(
+	mut commands: Commands,
+	pipes: Query<Entity, With<Pipe>>,
+	mut score: ResMut<GameScore>,
+	mut pipe_spawn_timer: ResMut<PipeSpawnTimer>,
+) {
+	for pipe in pipes {
+		commands.entity(pipe).despawn();
+	}
+	pipe_spawn_timer.timer.reset();
+	**score = 0;
 }
 
 fn handle_movement(
@@ -182,12 +206,10 @@ fn handle_pipe_despawn(mut commands: Commands, query: Query<(Entity, &Transform)
 }
 
 fn check_player_pipe_collission(
-	mut commands: Commands,
-	player_query: Single<(&Transform, Entity), With<Player>>,
+	player_transform: Single<&Transform, With<Player>>,
 	pipes_query: Query<&Transform, With<Pipe>>,
 	mut next_state: ResMut<NextState<GameStates>>,
 ) {
-	let (player_transform, player) = player_query.into_inner();
 	let player_collider = Aabb2d::new(
 		player_transform.translation.truncate(),
 		player_transform.scale.truncate() / 2.0,
@@ -198,20 +220,16 @@ fn check_player_pipe_collission(
 			pipe_transform.scale.truncate() / 2.0,
 		);
 		if player_collider.intersects(&pipe_collider) {
-			commands.entity(player).despawn();
 			next_state.set(GameStates::GameOver);
 		}
 	}
 }
 
 fn check_player_under_screen(
-	mut commands: Commands,
-	player_query: Single<(&Transform, Entity), With<Player>>,
+	player_transform: Single<&Transform, With<Player>>,
 	mut next_state: ResMut<NextState<GameStates>>,
 ) {
-	let (player_transform, player) = player_query.into_inner();
 	if player_transform.translation.y < -WINDOW_SIZE.y / 2.0 {
-		commands.entity(player).despawn();
 		next_state.set(GameStates::GameOver);
 	}
 }
@@ -239,6 +257,15 @@ fn update_score(score: Res<GameScore>, mut score_display: Single<&mut Text, With
 	**score_display = format!("Score: {}", **score).into();
 }
 
+fn restart_on_r(
+	keyboard_input: Res<ButtonInput<KeyCode>>,
+	mut next_state: ResMut<NextState<GameStates>>,
+) {
+	if keyboard_input.just_released(KeyCode::KeyR) {
+		next_state.set(GameStates::InGame);
+	}
+}
+
 fn main() {
 	App::new()
 		.insert_resource(GameScore::default())
@@ -252,6 +279,9 @@ fn main() {
 			..default()
 		}))
 		.add_systems(Startup, setup)
+		.add_systems(OnEnter(GameStates::InGame), on_enter_game)
+		.add_systems(OnEnter(GameStates::GameOver), on_game_over)
+		.add_systems(OnExit(GameStates::GameOver), on_game_restart)
 		.add_systems(
 			FixedUpdate,
 			(
@@ -266,7 +296,13 @@ fn main() {
 			)
 				.run_if(in_state(GameStates::InGame)),
 		)
-		.add_systems(Update, handle_movement)
+		.add_systems(
+			Update,
+			(
+				handle_movement.run_if(in_state(GameStates::InGame)),
+				restart_on_r.run_if(in_state(GameStates::GameOver)),
+			),
+		)
 		.init_state::<GameStates>()
 		.run();
 }
