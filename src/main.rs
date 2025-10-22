@@ -5,9 +5,12 @@ use rand::{rng, Rng};
 use bevy::{
 	math::bounding::{Aabb2d, IntersectsVolume},
 	prelude::*,
+	ui::Node,
 };
 
 const WINDOW_SIZE: Vec2 = Vec2::new(1280.0, 720.0);
+
+const SCOREBOARD_TEXT_PADDING: Val = Val::Px(5.0);
 
 const GRAVITY_STRENGTH: f32 = 2000.0;
 const JUMP_STRENGTH: f32 = 800.0;
@@ -20,6 +23,9 @@ const PIPE_HEIGHT: f32 = WINDOW_SIZE.y;
 
 #[derive(Component)]
 struct Player;
+
+#[derive(Component)]
+struct Scoretext;
 
 #[derive(Component)]
 struct Pipe {
@@ -74,6 +80,20 @@ fn setup(mut commands: Commands) {
 		Acceleration::gravity(),
 		Velocity::default(),
 		Player,
+	));
+	commands.spawn((
+		Scoretext,
+		Text::new("Score: 0"),
+		TextFont {
+			font_size: 64.0,
+			..default()
+		},
+		Node {
+			position_type: PositionType::Absolute,
+			top: SCOREBOARD_TEXT_PADDING,
+			left: SCOREBOARD_TEXT_PADDING,
+			..default()
+		},
 	));
 }
 
@@ -195,9 +215,15 @@ fn give_score_when_over_player(
 		if pipe_right < player_left {
 			pipe.give_score = false;
 			global_state.score += 1;
-			println!("Score: {}", global_state.score);
 		}
 	}
+}
+
+fn update_score(
+	state: Res<GlobalGameState>,
+	mut score_display: Single<&mut Text, With<Scoretext>>,
+) {
+	**score_display = format!("Score: {}", state.score).into();
 }
 
 fn not_game_over(global_state: Res<GlobalGameState>) -> bool {
@@ -226,6 +252,7 @@ fn main() {
 				handle_pipe_despawn,
 				check_player_pipe_collission,
 				give_score_when_over_player,
+				update_score,
 			)
 				.run_if(not_game_over),
 		)
