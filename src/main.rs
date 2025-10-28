@@ -225,12 +225,16 @@ fn check_player_pipe_collission(
 	}
 }
 
-fn check_player_under_screen(
+fn check_player_screen_bounds(
 	player_transform: Single<&Transform, With<Player>>,
+	mut player_velocity: Single<&mut Velocity, With<Player>>,
 	mut next_state: ResMut<NextState<GameStates>>,
 ) {
 	if player_transform.translation.y < -WINDOW_SIZE.y / 2.0 {
 		next_state.set(GameStates::GameOver);
+	}
+	if player_transform.translation.y - 100.0 > WINDOW_SIZE.y / 2.0 {
+		player_velocity.y = 0.0;
 	}
 }
 
@@ -290,7 +294,7 @@ fn main() {
 				handle_pipe_spawn,
 				handle_pipe_despawn,
 				check_player_pipe_collission,
-				check_player_under_screen,
+				check_player_screen_bounds,
 				give_score_when_over_player,
 				update_score,
 			)
